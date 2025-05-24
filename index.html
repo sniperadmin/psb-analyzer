@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Performance and Balance Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom font for a clean look */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8; /* Light blue-gray background */
+        }
+        .container {
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 2rem;
+            background-color: #ffffff;
+            border-radius: 12px; /* More rounded corners */
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1); /* Softer shadow */
+        }
+        textarea {
+            min-height: 200px; /* Increased height for code input */
+            font-family: 'Fira Code', 'Consolas', 'Monaco', monospace; /* Monospaced font for code */
+            font-size: 0.95rem;
+            line-height: 1.5;
+            resize: vertical; /* Allow vertical resizing */
+        }
+        button {
+            transition: all 0.2s ease-in-out; /* Smooth transitions for buttons */
+        }
+        button:hover {
+            transform: translateY(-2px); /* Slight lift on hover */
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.15); /* Enhanced shadow on hover */
+        }
+        .result-box {
+            background-color: #e2e8f0; /* Light gray for results */
+            border-left: 4px solid #3b82f6; /* Blue accent border */
+            padding: 1rem;
+            border-radius: 8px;
+        }
+        .golden-zone {
+            background-color: #d1fae5; /* Light green for golden zone */
+            border-color: #10b981; /* Green accent border */
+        }
+        .warning-zone {
+            background-color: #fefcbf; /* Light yellow for warning zone */
+            border-color: #f59e0b; /* Yellow accent border */
+        }
+        .danger-zone {
+            background-color: #fee2e2; /* Light red for danger zone */
+            border-color: #ef4444; /* Red accent border */
+        }
+    </style>
+</head>
+<body class="p-4">
+    <div class="container">
+        <h1 class="text-4xl font-extrabold text-center text-gray-800 mb-6">Code Performance and Balance Analyzer</h1>
+        <p class="text-lg text-gray-600 mb-8 text-center">
+            Paste your JavaScript code below to measure its execution time and calculate a heuristic "Performance-Simplicity Balance (PSB) Ratio." This ratio aims to give an intuitive sense of "harmony" between code complexity and speed.
+        </p>
+
+        <div class="mb-6">
+            <label for="codeSnippet" class="block text-gray-700 text-sm font-bold mb-2">
+                Enter your JavaScript code:
+            </label>
+            <textarea
+                id="codeSnippet"
+                class="shadow-sm appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="function sumNumbers(n) {&#10;  let sum = 0;&#10;  for (let i = 0; i < n; i++) {&#10;    sum += i;&#10;  }&#10;  return sum;&#10;}&#10;&#10;sumNumbers(1000000); // Call the function with a large number"
+            ></textarea>
+        </div>
+
+        <div class="mb-6">
+            <label for="controlFlowWeight" class="block text-gray-700 text-sm font-bold mb-2">
+                Control Flow Weight (for complexity calculation):
+            </label>
+            <input
+                type="number"
+                id="controlFlowWeight"
+                value="5"
+                min="0"
+                class="shadow-sm appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <p class="text-xs text-gray-500 mt-1">
+                This multiplies the count of control flow statements (if, for, while, etc.) in the complexity score.
+            </p>
+        </div>
+
+        <button
+            id="runButton"
+            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75"
+        >
+            Run and Analyze Balance
+        </button>
+
+        <div id="results" class="mt-8 p-4 result-box hidden">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-3">Analysis Results:</h2>
+            <p id="executionTime" class="text-xl text-gray-700 font-medium mb-2"></p>
+            <p id="loc" class="text-lg text-gray-700 mb-1"></p>
+            <p id="controlFlowCount" class="text-lg text-gray-700 mb-1"></p>
+            <p id="complexityScore" class="text-lg text-gray-700 mb-3"></p>
+            <p id="psbRatio" class="text-2xl font-bold text-gray-800 mb-3"></p>
+            <div id="psbInterpretation" class="p-3 rounded-lg"></div>
+            <p class="text-sm text-gray-500 mt-4">
+                Note: Performance can vary based on system load and other factors. The PSB Ratio is a heuristic metric for conceptual exploration.
+            </p>
+        </div>
+
+        <div id="messageBox" class="mt-8 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg hidden" role="alert">
+            <strong class="font-bold">Error:</strong>
+            <span id="messageText" class="block sm:inline"></span>
+        </div>
+    </div>
+
+    <script>
+        // Get references to DOM elements
+        const codeSnippetTextarea = document.getElementById('codeSnippet');
+        const controlFlowWeightInput = document.getElementById('controlFlowWeight');
+        const runButton = document.getElementById('runButton');
+        const resultsDiv = document.getElementById('results');
+        const executionTimeParagraph = document.getElementById('executionTime');
+        const locParagraph = document.getElementById('loc');
+        const controlFlowCountParagraph = document.getElementById('controlFlowCount');
+        const complexityScoreParagraph = document.getElementById('complexityScore');
+        const psbRatioParagraph = document.getElementById('psbRatio');
+        const psbInterpretationDiv = document.getElementById('psbInterpretation');
+        const messageBox = document.getElementById('messageBox');
+        const messageText = document.getElementById('messageText');
+
+        // Golden Ratio constant
+        const GOLDEN_RATIO = (1 + Math.sqrt(5)) / 2; // Approximately 1.618
+        const GOLDEN_ZONE_TOLERANCE = 0.2; // +/- 0.2 from Golden Ratio
+
+        // Function to calculate Lines of Code (LOC)
+        function calculateLOC(code) {
+            return code.split('\n').filter(line => line.trim() !== '').length;
+        }
+
+        // Function to calculate Control Flow Count (CFC)
+        function calculateControlFlowCount(code) {
+            const controlFlowKeywords = ['if', 'for', 'while', 'switch', 'try', 'catch'];
+            let count = 0;
+            // Use a regex to find whole words to avoid partial matches
+            const regex = new RegExp(`\\b(?:${controlFlowKeywords.join('|')})\\b`, 'g');
+            const matches = code.match(regex);
+            if (matches) {
+                count = matches.length;
+            }
+            return count;
+        }
+
+        // Event listener for the run button
+        runButton.addEventListener('click', () => {
+            const code = codeSnippetTextarea.value; // Get the code from the textarea
+            const controlFlowWeight = parseFloat(controlFlowWeightInput.value) || 5; // Get weight, default to 5
+
+            // Clear previous results and messages
+            resultsDiv.classList.add('hidden');
+            messageBox.classList.add('hidden');
+            messageText.textContent = '';
+            psbInterpretationDiv.className = ''; // Clear previous interpretation styling
+
+            if (!code.trim()) {
+                // Show an error if the textarea is empty
+                messageText.textContent = 'Please enter some JavaScript code to analyze.';
+                messageBox.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                // 1. Measure Execution Time
+                const startTime = performance.now();
+                // Execute the user's code. Using `eval()` is generally discouraged for untrusted input
+                // due to security risks, but for a local prototype with user-controlled input, it's used here
+                // to directly execute the provided JavaScript.
+                eval(code);
+                const endTime = performance.now();
+                const executionTime = (endTime - startTime); // Keep full precision for calculation
+
+                // 2. Calculate Code Complexity Score
+                const loc = calculateLOC(code);
+                const controlFlowCount = calculateControlFlowCount(code);
+                const complexityScore = loc + (controlFlowCount * controlFlowWeight);
+
+                // 3. Calculate PSB Ratio
+                let psbRatio = 0;
+                if (executionTime > 0) { // Avoid division by zero
+                    psbRatio = complexityScore / executionTime;
+                } else if (complexityScore > 0) {
+                    // If time is 0 but complexity > 0, it means infinitely fast, so ratio is effectively infinite
+                    psbRatio = Infinity;
+                } else {
+                    // If both are 0, it's trivial code, ratio is undefined/0
+                    psbRatio = 0;
+                }
+
+
+                // Display results
+                executionTimeParagraph.textContent = `Execution Time: ${executionTime.toFixed(4)} milliseconds`;
+                locParagraph.textContent = `Lines of Code (LOC): ${loc}`;
+                controlFlowCountParagraph.textContent = `Control Flow Statements: ${controlFlowCount}`;
+                complexityScoreParagraph.textContent = `Code Complexity Score: ${complexityScore.toFixed(2)}`;
+                psbRatioParagraph.textContent = `PSB Ratio (Complexity / Time): ${psbRatio.toFixed(4)}`;
+
+                // Interpret PSB Ratio
+                let interpretationText = '';
+                if (psbRatio === Infinity) {
+                    interpretationText = `This code executes almost instantly with some complexity. The ratio is effectively infinite, suggesting extreme efficiency!`;
+                    psbInterpretationDiv.classList.add('golden-zone'); // Treat as highly efficient
+                } else if (psbRatio >= (GOLDEN_RATIO - GOLDEN_ZONE_TOLERANCE) && psbRatio <= (GOLDEN_RATIO + GOLDEN_ZONE_TOLERANCE)) {
+                    interpretationText = `The PSB Ratio of ${psbRatio.toFixed(4)} is within the "Golden Zone" (approx. ${GOLDEN_RATIO.toFixed(3)} ± ${GOLDEN_ZONE_TOLERANCE}). This suggests a harmonious balance between code complexity and execution speed.`;
+                    psbInterpretationDiv.classList.add('golden-zone');
+                } else if (psbRatio > (GOLDEN_RATIO + GOLDEN_ZONE_TOLERANCE) * 2 || psbRatio < (GOLDEN_RATIO - GOLDEN_ZONE_TOLERANCE) / 2) {
+                    interpretationText = `The PSB Ratio of ${psbRatio.toFixed(4)} is significantly far from the "Golden Zone." This might indicate an imbalance, either too much complexity for its speed, or too little complexity for its slowness. Consider optimizing for balance.`;
+                    psbInterpretationDiv.classList.add('danger-zone');
+                } else {
+                    interpretationText = `The PSB Ratio of ${psbRatio.toFixed(4)} is outside the "Golden Zone" but not extremely so. It suggests room for optimization to find a better balance between complexity and speed.`;
+                    psbInterpretationDiv.classList.add('warning-zone');
+                }
+                psbInterpretationDiv.innerHTML = `<p class="font-semibold mb-2">Interpretation:</p><p>${interpretationText}</p>`;
+
+                resultsDiv.classList.remove('hidden'); // Show the results div
+
+            } catch (error) {
+                // Handle any errors during code execution
+                messageText.textContent = `An error occurred during execution: ${error.message}`;
+                messageBox.classList.remove('hidden'); // Show the error message box
+                console.error("Code execution error:", error); // Log error to console for debugging
+            }
+        });
+    </script>
+</body>
+</html>
