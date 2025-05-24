@@ -1,4 +1,4 @@
-# Golden Ration Balance Code Analyzer
+# Golden Ratio Balance Code Analyzer
 
 It's an exciting challenge to prototype a practical engineering metric that embodies the concept of a "Golden Ratio" for code performance and complexity! While no such universally established metric exists in software engineering, we can create a heuristic metric that aims to quantify the balance between a code snippet's structural complexity and its execution speed. This aligns with the spirit of the Golden Ratio, which represents harmonious proportions and optimal balance in nature and design, and resonates with the Islamic principles of Mizan (balance) and I'tidal (moderation).
 
